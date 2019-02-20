@@ -1,0 +1,178 @@
+Sending Direct Mail in Laravel [Steps]: 
+
+1. Setup .env file
+
+MAIL_DRIVER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+//Setting up mailing address from where mail will be sent and the password is app generated password from google account 2-steps verification ! 
+MAIL_USERNAME=tareque.bracu@gmail.com
+MAIL_PASSWORD=hwfzbtgchwbgvjab
+MAIL_ENCRYPTION=tls
+
+2. Setup Mail.php file
+
+ return [
+     'driver' => env('MAIL_DRIVER', 'smtp'),
+     'host' => env('MAIL_HOST', 'smtp.gmail.com'),
+     'port' => env('MAIL_PORT', 587),
+     'from' => ['address' => 'tareque.bracu@gmail.com', 'name' => 'Ahmed Tareque'],
+     'encryption' => env('MAIL_ENCRYPTION', 'tls'),
+     'username' => env('MAIL_USERNAME'),
+     'password' => env('MAIL_PASSWORD'),
+     'sendmail' => '/usr/sbin/sendmail -bs',
+     'pretend' => env('MAIL_PRETEND', false),
+ ];
+
+3. Setup post request from form (vue.js)
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+<v-card flat class="transparent"> 
+       <v-form accept-charset="UTF-8" enctype="multipart/form-data" role="form" ref="contactForm">
+            <v-text-field v-model="contacting.name" :error-messages="errors['name']"  label="Name" class="pr-2"  required></v-text-field>
+            <v-text-field v-model="contacting.subject" :error-messages="errors['subject']"  label="Subject" class="pr-2"  required></v-text-field>
+<v-btn color="primary ml-0" @click="contactMessage" large class="no-margin">Send Message</v-btn>
+       </v-form>
+</v-card>
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+<script>
+
+export default {
+    data() {
+      return {
+        emailRules: [
+          v => !!v || 'E-mail is required',
+          v => /.+@.+/.test(v) || 'E-mail must be valid'
+        ],
+        contacting: {
+          name: '',
+          email: '',
+          subject: '',
+          user_message: '',
+        },
+        errors: {},
+      }
+    },
+    methods: {
+      async contactMessage() {
+        if (this.$refs.contactForm.validate()) {
+          let $this = this;
+          let data = {};
+          data = this.contacting;
+          console.log(data);
+          this.$axios.post(`/api/contacting`, data).then(({res}) => {
+          }).catch(error => {
+            error = Object.assign({}, error);
+            if (typeof error.response.data.errors === 'object') {
+              $this.errors = error.response.data.errors;
+            } else {
+              $this.errors = {};
+              this.$store.dispatch('notification/setSnack', 'Sorry, Something went wrong, please try again.');
+            }
+          })
+        }
+      }
+    }
+  }
+
+</script>
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+
+4. Route Setup
+
+$router->post('contacting', ['uses' => 'PagesController@contactSend']);
+
+5. Controller Page Setup
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+<?php
+namespace App\Http\Controllers\API;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Contracts\Mail\MailQueue;
+use Illuminate\Http\Request;
+use App\Models\Pages;
+use Illuminate\Support\Facades\Mail;
+
+
+class PagesController extends Controller
+{
+    protected $mailer;
+
+  /**
+ * Create a new controller instance.
+ *
+ * @return void
+ */
+  public function __construct(MailQueue $mailer)
+  {
+      $this->mailer = $mailer;
+  }
+
+  //
+
+  /**
+   * searching for page from generated slug
+   * @param $slug
+   * @return mixed
+   */
+  public function show($slug)
+  {
+    return Pages::where('slug', '=', $slug)->firstOrFail();
+  }
+
+    /**
+     * URL: /contact/send (POST)
+     *
+     * @param Request $request
+     * @return array
+     */
+    public function contactSend(Request $request)
+    {
+//        dd('contacting',json_decode(request()->get('name')),$request->input('name'));
+        // Check if its our form
+//        if (session()->token() !== $request->input('_token')) {
+//            return response()->json( array(
+//                'msg' => 'Unauthorized attempt to send email'
+//            ) );
+//        }
+
+        $name  = $request->input('name');
+        $email = $request->input('email');
+        $subject = $request->input('subject');
+        $body  = $request->input('user_message');
+
+        // Only allow sending email if the site is not demo
+//        if (!env('SHOP_DEMO')) {
+            Mail::send('emails.contact',
+                [
+                    'name'  => $name,
+                    'email' => $email,
+                    'subject' => $subject,
+                    'user_message'  => $body
+                ],
+                function($message) use ($name, $email)
+                {
+                    $message->replyTo($email, $name)
+                        ->to('awsaf.anam@gmail.com', 'Awsaf Anam Chowdhury')
+//                        ->to('naweedmdmahbub@gmail.com', 'Naweed vi')
+                        ->subject(config('app.name') . ' - Contact Form');
+                });
+//        }
+
+        $response = [
+            'status' => 'success',
+            'msg' => 'Email sent successfully',
+        ];
+
+        return $response;
+    }
+
+
+}
+
+
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
